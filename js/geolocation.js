@@ -184,9 +184,30 @@ var UserTracking = (function($, google) {
      * @return {void}
      */
     function geoInit() {
-        if(wpid == null) {
-            geoGetPos();
-        }
+        setInterval(function() {
+            navigator.geolocation.getCurrentPosition(function(position) {
+                if(previousLat != null && previousLong != null) {
+                    var travelCoordinates = [
+                        new google.maps.LatLng(previousLat, previousLong),
+                        new google.maps.LatLng(position.coords.latitude, position.coords.longitude),
+                    ];
+                    var travelPath = new google.maps.Polyline({
+                        path: travelCoordinates,
+                        geodesic: true,
+                        strokeColor: '#FF0000',
+                        strokeOpacity: 1.0,
+                        strokeWeight: 2
+                    });
+                    travelPath.setMap(map);
+                }
+                previousLat = position.coords.latitude;
+                previousLong = position.coords.longitude;
+            });
+        }, 3000);
+
+        // if(wpid == null) {
+        //     geoGetPos();
+        // }
     }
 
     return {
