@@ -8,7 +8,7 @@ var UserTracking = (function($, google) {
     var wpid = null;
     var previousLat = null;
     var previousLong = null;
-    var minAccuracy = 10; // Double representing the accuracy of the latitude and longitude properties expressed in meters
+    var minAccuracy = 100; // Double representing the accuracy of the latitude and longitude properties expressed in meters
     var enableHighAccuracy = true; // receive the best possible results which can take longer to process
     var maximumAge = 5000; // Maximum age in milliseconds of a possible cached position that is acceptable to return
     var timeout = 2500; // Maximum length of time (in milliseconds) the device is allowed to take in order to return a position
@@ -184,30 +184,30 @@ var UserTracking = (function($, google) {
      * @return {void}
      */
     function geoInit() {
-        setInterval(function() {
-            navigator.geolocation.getCurrentPosition(function(position) {
-                if(previousLat != null && previousLong != null) {
-                    var travelCoordinates = [
-                        new google.maps.LatLng(previousLat, previousLong),
-                        new google.maps.LatLng(position.coords.latitude, position.coords.longitude),
-                    ];
-                    var travelPath = new google.maps.Polyline({
-                        path: travelCoordinates,
-                        geodesic: true,
-                        strokeColor: '#FF0000',
-                        strokeOpacity: 1.0,
-                        strokeWeight: 2
-                    });
-                    travelPath.setMap(map);
-                }
-                previousLat = position.coords.latitude;
-                previousLong = position.coords.longitude;
-            });
-        }, 3000);
+        // setInterval(function() {
+        //     navigator.geolocation.getCurrentPosition(function(position) {
+        //         if(previousLat != null && previousLong != null) {
+        //             var travelCoordinates = [
+        //                 new google.maps.LatLng(previousLat, previousLong),
+        //                 new google.maps.LatLng(position.coords.latitude, position.coords.longitude),
+        //             ];
+        //             var travelPath = new google.maps.Polyline({
+        //                 path: travelCoordinates,
+        //                 geodesic: true,
+        //                 strokeColor: '#FF0000',
+        //                 strokeOpacity: 1.0,
+        //                 strokeWeight: 2
+        //             });
+        //             travelPath.setMap(map);
+        //         }
+        //         previousLat = position.coords.latitude;
+        //         previousLong = position.coords.longitude;
+        //     });
+        // }, 3000);
 
-        // if(wpid == null) {
-        //     geoGetPos();
-        // }
+        if(wpid == null) {
+            geoGetPos();
+        }
     }
 
     return {
