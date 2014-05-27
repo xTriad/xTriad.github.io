@@ -164,6 +164,37 @@ var UserTracking = (function($) {
     }
 
     /**
+     * Calculates the distance between two latitude and logitude points using the
+     * Haversine formula. Note that the Haversine formula doesn't account for the
+     * Earth being a spheroid, so you'll get some error introduced to where it
+     * can't be guaranteed correct to better than 0.5%. 
+     * 
+     * http://stackoverflow.com/a/27943
+     * 
+     * @param  {int} lat1 First latitude point
+     * @param  {int} lon1 First longitude point
+     * @param  {int} lat2 Second latitude point
+     * @param  {int} lon2 Second longitude point
+     * @return {int} The distance between the two points in kilometers
+     */
+    function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
+        var R = 6371; // Radius of the earth in km
+        var dLat = deg2rad(lat2-lat1);  // deg2rad below
+        var dLon = deg2rad(lon2-lon1); 
+        var a = 
+            Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
+            Math.sin(dLon/2) * Math.sin(dLon/2);
+        var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+        var d = R * c; // Distance in km
+        return d;
+    }
+
+    function deg2rad(deg) {
+        return deg * (Math.PI/180);
+    }
+
+    /**
      * Starts the gelocation service.
      * @return {void}
      */
@@ -173,6 +204,10 @@ var UserTracking = (function($) {
         console.log("Geolocation service started.");
     }
 
+    /**
+     * Stops the geolocation service.
+     * @return {void}
+     */
     function geoStop() {
         clearInterval(geoIntervalRef);
         console.log("Geolocation service stopped.");
@@ -220,7 +255,12 @@ var UserTracking = (function($) {
                 $('#viewMapBtn').removeClass('ui-state-disabled');
 
                 if(travelCoordinates.length >= 1) {
-                    $('#geo-output').html('');
+                    var l = travelCoordinates.length-1;
+                    var distance = getDistanceFromLatLonInKm(
+                        travelCoordinates[0].lat, travelCoordinates[0].lng,
+                        travelCoordinates[l].lat, travelCoordinates[l].lng
+                    );
+                    $('#geo-output').html('Distance: ' + distance + " kilometers");
                 } else {
                     $('#viewMapBtn').addClass('ui-state-disabled');
                     $('#geo-output').html('The app was unable to collect GPS position coordinates.');
