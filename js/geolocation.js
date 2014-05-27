@@ -74,7 +74,7 @@ var UserTracking = (function($) {
         //     new google.maps.LatLng(-27.46758, 153.027892)
         // ];
 
-        if(travelCoordinates.length > 1) {
+        if(travelCoordinates.length >= 1) {
             var infoWindowStart = new google.maps.InfoWindow({
                 map: map,
                 position: travelCoordinates[0],
@@ -120,47 +120,55 @@ var UserTracking = (function($) {
     }
 
     /**
+     * Gets the user's current GPS coordinates and stores them.
+     * @return {void}
+     */
+    function geoLogCoords() {
+        navigator.geolocation.getCurrentPosition(function(position) {
+            if(previousLat == null || previousLat != position.coords.latitude || previousLong != position.coords.longitude) {
+                previousLat = position.coords.latitude;
+                previousLong = position.coords.longitude;
+
+                // TODO: Push the coordinates to disk so we don't use too much memory
+                // if(travelCoordinates.length >= 75) {
+                //     var storedData = localStorage.getItem("hp-mobile-fleet");
+                //     if(storedData != null) {
+                //         JSON.parse(storedData).concat(travelCoordinates);
+                //         travelCoordinates.clear();
+                //     }
+                //     localStorage.setItem("hp-mobile-fleet", JSON.stringify(travelCoordinates));
+                // }
+
+                var timestamp = Math.round(new Date().getTime() / 1000);
+                var textarea = $("#geo-output");
+                textarea.html("Latitude=" + position.coords.latitude + ", "
+                    + "Longitude=" + position.coords.longitude + "<br>" + textarea.html());
+
+                console.log("Latitude=" + position.coords.latitude + "\n"
+                    + "Longitude=" + position.coords.longitude + "\n"
+                    + "Accuracy=" + Math.round(position.coords.accuracy, 1) + "m\n"
+                    + "Speed=" + position.coords.speed + "m/s\n"
+                    + "Altitude=" + position.coords.altitude + "\n"
+                    + "Altitude Accuracy=" + Math.round(position.coords.altitudeAccuracy,1) + "\n"
+                    + "Heading=" + position.coords.heading + "\n"
+                    + "Timestamp=" + timestamp + "\n"
+                );
+
+                travelCoordinates.push({lat: position.coords.latitude, lng: position.coords.longitude});
+            }
+        }, function(error) {
+            handleNoGeolocation(true);
+            console.log(error);
+        });
+    }
+
+    /**
      * Starts the gelocation service.
      * @return {void}
      */
     function geoStart() {
-        geoIntervalRef = setInterval(function() {
-            navigator.geolocation.getCurrentPosition(function(position) {
-                if(previousLat == null || previousLat != position.coords.latitude || previousLong != position.coords.longitude) {
-                    previousLat = position.coords.latitude;
-                    previousLong = position.coords.longitude;
-
-                    // Push the coordinates to disk so we don't use too much memory
-                    // if(travelCoordinates.length >= 75) {
-                    //     var storedData = localStorage.getItem("hp-mobile-fleet");
-                    //     if(storedData != null) {
-                    //         JSON.parse(storedData).concat(travelCoordinates);
-                    //         travelCoordinates.clear();
-                    //     }
-                    //     localStorage.setItem("hp-mobile-fleet", JSON.stringify(travelCoordinates));
-                    // }
-
-                    var timestamp = Math.round(new Date().getTime() / 1000);
-                    var textarea = $("#geo-output");
-                    textarea.html("Latitude=" + position.coords.latitude + ", "
-                        + "Longitude=" + position.coords.longitude + "<br>" + textarea.html());
-
-                    console.log("Latitude=" + position.coords.latitude + "\n"
-                        + "Longitude=" + position.coords.longitude + "\n"
-                        + "Accuracy=" + Math.round(position.coords.accuracy, 1) + "m\n"
-                        + "Speed=" + position.coords.speed + "m/s\n"
-                        + "Altitude=" + position.coords.altitude + "\n"
-                        + "Altitude Accuracy=" + Math.round(position.coords.altitudeAccuracy,1) + "\n"
-                        + "Heading=" + position.coords.heading + "\n"
-                        + "Timestamp=" + timestamp + "\n"
-                    );
-                }
-                travelCoordinates.push({lat: position.coords.latitude, lng: position.coords.longitude});
-            }, function(error) {
-                handleNoGeolocation(true);
-                console.log(error);
-            });
-        }, geoIntervalMS);
+        geoLogCoords();
+        geoIntervalRef = setInterval(geoLogCoords, geoIntervalMS);
         console.log("Geolocation service started.");
     }
 
@@ -203,7 +211,9 @@ var UserTracking = (function($) {
         stop: function() {
             if(hasGeoSupport) {
                 geoStop();
+
                 // TODO: Send results to server
+
                 $('#startBtn').removeClass('ui-state-disabled');
                 $('#stopBtn').addClass('ui-state-disabled');
                 $('#viewMapBtn').removeClass('ui-state-disabled');
