@@ -43,7 +43,8 @@ var UserTracking = (function($) {
             center: new google.maps.LatLng(-34.397, 150.644)
         });
 
-        $('#map-canvas').css('height', ($(document).height() / 1.17) + "px");
+        var viewPortHeight = Math.max(document.documentElement.clientHeight, window.innerHeight || $(document).height());
+        $('#map-canvas').css('height', (viewPortHeight / 1.21) + "px");
 
         drawPath();
     }
