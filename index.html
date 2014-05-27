@@ -3,26 +3,35 @@
 <head>
     <title>HP Mobile Fleet</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" href="lib/jquery-mobile/jquery.mobile-1.4.2.min.css" />
-    <link rel="stylesheet" href="css/main.css" />
+    <link rel="stylesheet" href="lib/jquery-mobile/jquery.mobile-1.4.2.min.css">
+    <link rel="stylesheet" href="css/main.css">
     <script src="lib/jquery/jquery-1.11.0.js"></script>
     <script src="lib/jquery-mobile/jquery.mobile-1.4.2.min.js"></script>
     <script src="lib/angularjs/angular.js"></script>
     <script src="js/main.js"></script>
-    <script src="https://maps.googleapis.com/maps/api/js?v=3.exp&sensor=true"></script>
+    <!-- <script src="https://maps.googleapis.com/maps/api/js?v=3.exp&sensor=true"></script> -->
     <script src="js/geolocation.js"></script>
 </head>
 <body>
-
-    <!-- Google Maps Page -->
-
-    <div data-role="page" id="googleMapsPage">
+    <div data-role="page" id="startTravelPage">
         <div data-role="header">
             <h1>Fleet Mileage</h1>
         </div>
         <div role="main" class="ui-content">
-            <div id="map-canvas"></div>
+            <button id="startBtn" class="ui-btn ui-shadow" onclick="UserTracking.start()">Start</button>
+            <br>
+            <button id="stopBtn" class="ui-btn ui-shadow ui-state-disabled" onclick="UserTracking.stop()">Stop</button>
+            <br>
+            <a id="viewMapBtn" href="#googleMapsPage" class="ui-btn ui-shadow ui-state-disabled">View Map</a>
+            <br>
             <div id="geo-output"></div>
+        </div>
+    </div>
+    <!-- Google Maps Page -->
+    <div data-role="page" id="googleMapsPage">
+        <div role="main" class="ui-content">
+            <div id="map-canvas"></div>
+            <a href="#startTravelPage" class="ui-btn ui-shadow">Back</a>
         </div>
     </div>
 </body>

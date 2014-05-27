@@ -1,49 +1,102 @@
-var UserTracking = (function($, google) {
+var UserTracking = (function($) {
+
+    // Reference to the google maps API
+    var google = null;
 
     // Reference to the Google map
     var map = null;
-    var initialPos = null;
+
+    // Coordinates of the user's trip
+    var travelCoordinates = [];
+
+    // How often to query the GPS for updated coordinates in milliseconds
+    var geoIntervalMS = 5000;
+    var geoIntervalRef = null;
+
+    // True if the browser supports the geolocation service
+    var hasGeoSupport = !!navigator.geolocation;
+    
+    // How many times we should check to see if the maps api has loaded
+    var loadingCounter = 10;
 
     // Geolocation settings
-    var wpid = null;
     var previousLat = null;
     var previousLong = null;
-    var minAccuracy = 100; // Double representing the accuracy of the latitude and longitude properties expressed in meters
-    var enableHighAccuracy = true; // receive the best possible results which can take longer to process
-    var maximumAge = 5000; // Maximum age in milliseconds of a possible cached position that is acceptable to return
-    var timeout = 2500; // Maximum length of time (in milliseconds) the device is allowed to take in order to return a position
-    //var distance_travelled = 0;
 
     /**
-     * Initialize Google maps and the Geotracking service.
+     * Initialize Google maps.
      * @return {void}
      */
     function mapInit() {
+        // If the Google maps file hasn't finished loading
+        if(google == null) {
+            if(--loadingCounter <= 0) {
+                setTimeout(function() { mapInit(); }, 16);
+            } else {
+                $('#geo-output').html('Unable to load Google maps');
+            }
+            return;
+        }
+
         map = new google.maps.Map($('#map-canvas')[0], {
-            zoom: 15
+            zoom: 13,
+            center: new google.maps.LatLng(-34.397, 150.644)
         });
 
-        if(navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(function(position) {
-                initialPos = new google.maps.LatLng(
-                    position.coords.latitude,
-                    position.coords.longitude
-                );
+        $('#map-canvas').css('height', ($(document).height() / 1.17) + "px");
 
-                var infoWindow = new google.maps.InfoWindow({
-                    map: map,
-                    position: initialPos,
-                    content: 'Location found using HTML5.'
-                  });
+        drawPath();
+    }
 
-                  map.setCenter(initialPos);
-                  geoInit();
-            }, function() {
-                  handleNoGeolocation(true);
+    /**
+     * Loads the Google maps Javascript files into the browser.
+     * @return {void}
+     */
+    function loadGoogleMaps() {
+        var script = document.createElement('script');
+        script.type = 'text/javascript';
+        script.src = 'https://maps.googleapis.com/maps/api/js?v=3.exp&sensor=true&callback=UserTracking.googleMapsCallback';
+        script.onload = function() {
+            google = window.google;
+        }
+        document.body.appendChild(script);
+    }
+
+    /**
+     * Draws the user's traveled path on the map.
+     * @return {void}
+     */
+    function drawPath() {
+        // travelCoordinates = [
+        //     new google.maps.LatLng(37.772323, -122.214897),
+        //     new google.maps.LatLng(21.291982, -157.821856),
+        //     new google.maps.LatLng(-18.142599, 178.431),
+        //     new google.maps.LatLng(-27.46758, 153.027892)
+        // ];
+
+        if(travelCoordinates.length > 1) {
+            var infoWindowStart = new google.maps.InfoWindow({
+                map: map,
+                position: travelCoordinates[0],
+                content: 'Start Location'
             });
+
+            var travelPath = new google.maps.Polyline({
+                path: travelCoordinates,
+                geodesic: true,
+                strokeColor: '#FF0000',
+                strokeOpacity: 1.0,
+                strokeWeight: 2
+            });
+
+            travelPath.setMap(map);
         } else {
-            // Browser doesn't support Geolocation
-            handleNoGeolocation(false);
+            var randomCoords = new google.maps.LatLng(-34.397, 150.644);
+            var infoWindowError = new google.maps.InfoWindow({
+                map: map,
+                position: randomCoords,
+                content: 'There are no travel coordinates to display.'
+            });
         }
     }
 
@@ -55,178 +108,126 @@ var UserTracking = (function($, google) {
      */
     function handleNoGeolocation(errorFlag) {
         if (errorFlag) {
+            // TODO: This needs to be a BIG error to let the user know that the app isn't
+            // being allowed to access the GPS. Also need to have this show immediately after
+            // they click the start button.
             var content = 'Error: The Geolocation service failed.';
         } else {
             var content = 'Error: Your browser doesn\'t support geolocation.';
         }
 
-        var options = {
-            map: map,
-            position: new google.maps.LatLng(60, 105),
-            content: content
-        };
-
-        var infoWindow = new google.maps.InfoWindow(options);
-        map.setCenter(options.position);
-    }
-
-    /**
-     * Adds a leader "0" to the time component that is < 10 to make it cross browser
-     * @param  {int} timeComponent The integer value of the time component that orginated
-     *     from methods such as getHours(), getMinutes(), getSeconds() etc.
-     * @return {string} The modified tiem component.
-     */
-    function formatTimeComponent(timeComponent) {
-        if(timeComponent < 10)
-            timeComponent = "0" + timeComponent;
-        else if(timeComponent.length < 2)
-            timeComponent = timeComponent + "0";
-        return timeComponent;
-    }
-
-    /**
-     * Called each time the user's location is updated by the geolocation service.
-     * @param  {Position Object} position The user's geolocation coordinates
-     * @return {void}
-     */
-    function geoSuccess(position) {
-        var d = new Date();
-        var h = d.getHours();
-        var m = d.getMinutes();
-        var s = d.getSeconds();
-
-        if(previousLat != null && previousLong != null) {
-            var travelCoordinates = [
-                new google.maps.LatLng(previousLat, previousLong),
-                new google.maps.LatLng(position.coords.latitude, position.coords.longitude),
-            ];
-            var travelPath = new google.maps.Polyline({
-                path: travelCoordinates,
-                geodesic: true,
-                strokeColor: '#FF0000',
-                strokeOpacity: 1.0,
-                strokeWeight: 2
-            });
-            travelPath.setMap(map);
-        }
-
-        var currentDatetime = formatTimeComponent(h) + ":" + formatTimeComponent(m) + ":" + formatTimeComponent(s);
-
-        // Check that the accuracy of our Geo location is sufficient for our needs
-        if(position.coords.accuracy <= minAccuracy) {
-            // We don't want to action anything if our position hasn't changed - we need this because
-            // on IPhone Safari at least, we get repeated readings of the same location with different
-            // accuracy which seems to count as a different reading - maybe it's just a very slightly
-            // different reading or maybe altitude, accuracy etc has changed
-            if(previousLat != position.coords.latitude || previousLong != position.coords.longitude) {
-                // if(position.coords.speed > maxSpeed)
-                //     maxSpeed = position.coords.speed;
-                // else if(position.coords.speed < minSpeed)
-                //     minSpeed = position.coords.speed;
-                    
-                // if(position.coords.altitude > maxAltitude)
-                //     maxAltitude = position.coords.altitude;
-                // else if(position.coords.altitude < minAltitude)
-                //     minAltitude = position.coords.altitude;
-
-                previousLat = position.coords.latitude;
-                previousLong = position.coords.longitude;
-
-                var textarea = $("#geo-output");
-                textarea.html("Latitude=" + position.coords.latitude + ", "
-                    + "Longitude=" + position.coords.longitude + "\n" + textarea.html());
-
-                console.log("Latitude=" + position.coords.latitude + "\n"
-                    + "Longitude=" + position.coords.longitude + "\n"
-                    + "Accuracy=" + Math.round(position.coords.accuracy, 1) + "m\n"
-                    + "Speed=" + position.coords.speed + "m/s\n"
-                    + "Altitude=" + position.coords.altitude + "\n"
-                    + "Altitude Accuracy=" + Math.round(position.coords.altitudeAccuracy,1) + "\n"
-                    + "Heading=" + position.coords.heading + "\n"
-                    + "Time=" + currentDatetime + "\n\n"
-                );
-            }
-        }
-        else {
-            console.log("Accuracy not sufficient (" + Math.round(position.coords.accuracy, 1)
-             + "m vs " + minAccuracy + "m) - last reading taken at: " + currentDatetime);
-        }
-    }
-
-    /**
-     * Called whenever navigator.geolocation.watchPosition() generates an error.
-     * @param  {Object} error A description of the error that occurred
-     * @return {void}
-     */
-    function geoError(error) {
-        switch(error.code) {
-            case error.TIMEOUT:
-                $("#geo-output").html("timeout\n" + $("#geo-output").html());
-                console.log("geoError: Timeout!");
-            break;
-        };
-    }
-
-    /**
-     * Setup a watchPosition to continually monitor the geolocation service.
-     * @return {void}
-     */
-    function geoGetPos() {
-        wpid = navigator.geolocation.watchPosition(geoSuccess, geoError, {
-            enableHighAccuracy: enableHighAccuracy,
-            maximumAge: maximumAge,
-            timeout: timeout
-        });
+        $("#geo-output").html(content);
     }
 
     /**
      * Starts the gelocation service.
      * @return {void}
      */
-    function geoInit() {
-        // setInterval(function() {
-        //     navigator.geolocation.getCurrentPosition(function(position) {
-        //         if(previousLat != null && previousLong != null) {
-        //             var travelCoordinates = [
-        //                 new google.maps.LatLng(previousLat, previousLong),
-        //                 new google.maps.LatLng(position.coords.latitude, position.coords.longitude),
-        //             ];
-        //             var travelPath = new google.maps.Polyline({
-        //                 path: travelCoordinates,
-        //                 geodesic: true,
-        //                 strokeColor: '#FF0000',
-        //                 strokeOpacity: 1.0,
-        //                 strokeWeight: 2
-        //             });
-        //             travelPath.setMap(map);
-        //         }
-        //         previousLat = position.coords.latitude;
-        //         previousLong = position.coords.longitude;
-        //     });
-        // }, 3000);
+    function geoStart() {
+        geoIntervalRef = setInterval(function() {
+            navigator.geolocation.getCurrentPosition(function(position) {
+                if(previousLat == null || previousLat != position.coords.latitude || previousLong != position.coords.longitude) {
+                    previousLat = position.coords.latitude;
+                    previousLong = position.coords.longitude;
 
-        if(wpid == null) {
-            geoGetPos();
-        }
+                    // Push the coordinates to disk so we don't use too much memory
+                    // if(travelCoordinates.length >= 75) {
+                    //     var storedData = localStorage.getItem("hp-mobile-fleet");
+                    //     if(storedData != null) {
+                    //         JSON.parse(storedData).concat(travelCoordinates);
+                    //         travelCoordinates.clear();
+                    //     }
+                    //     localStorage.setItem("hp-mobile-fleet", JSON.stringify(travelCoordinates));
+                    // }
+
+                    var timestamp = Math.round(new Date().getTime() / 1000);
+                    var textarea = $("#geo-output");
+                    textarea.html("Latitude=" + position.coords.latitude + ", "
+                        + "Longitude=" + position.coords.longitude + "\n" + textarea.html());
+
+                    console.log("Latitude=" + position.coords.latitude + "\n"
+                        + "Longitude=" + position.coords.longitude + "\n"
+                        + "Accuracy=" + Math.round(position.coords.accuracy, 1) + "m\n"
+                        + "Speed=" + position.coords.speed + "m/s\n"
+                        + "Altitude=" + position.coords.altitude + "\n"
+                        + "Altitude Accuracy=" + Math.round(position.coords.altitudeAccuracy,1) + "\n"
+                        + "Heading=" + position.coords.heading + "\n"
+                        + "Timestamp=" + timestamp + "\n"
+                    );
+                }
+                travelCoordinates.push(
+                    new google.maps.LatLng(position.coords.latitude, position.coords.longitude)
+                );
+            }, function(error) {
+                handleNoGeolocation(true);
+                console.log(error);
+            });
+        }, geoIntervalMS);
+        console.log("Geolocation service started.");
+    }
+
+    function geoStop() {
+        clearInterval(geoIntervalRef);
+        console.log("Geolocation service stopped.");
     }
 
     return {
         init: function() {
-            google.maps.event.addDomListener(window, 'load', mapInit);
+            if(!hasGeoSupport) {
+                handleNoGeolocation(false);
+                return;
+            }
 
             // Redraw the Google map when we navigate to the page
-            $(document).on("pageshow", "#googleMapsPage", function() {
+            $(document).on("pagebeforecreate", "#googleMapsPage", function() {
+                if(!window.google) {
+                    loadGoogleMaps();
+                } else {
+                    drawPath();
+                }
+            }).on("pageshow", "#googleMapsPage", function() {
                 google.maps.event.trigger(map, 'resize');
-                map.setCenter(initialPos);
+                if(travelCoordinates.length >= 1)
+                    map.setCenter(travelCoordinates[0]);
             });
+
+            return this;
+        },
+        start: function() {
+            if(hasGeoSupport) {
+                geoStart();
+                $('#startBtn').addClass('ui-state-disabled');
+                $('#stopBtn').removeClass('ui-state-disabled');
+                $('#viewMapBtn').addClass('ui-state-disabled');
+                $('#geo-output').html('');
+            }
+        },
+        stop: function() {
+            if(hasGeoSupport) {
+                geoStop();
+                // TODO: Send results to server
+                $('#startBtn').removeClass('ui-state-disabled');
+                $('#stopBtn').addClass('ui-state-disabled');
+                $('#viewMapBtn').removeClass('ui-state-disabled');
+
+                if(travelCoordinates.length >= 1) {
+                    $('#geo-output').html('');
+                } else {
+                    $('#viewMapBtn').addClass('ui-state-disabled');
+                    $('#geo-output').html('The app was unable to collect GPS position coordinates.');
+                }
+            }
+        },
+        googleMapsCallback: function() {
+            mapInit();
         }
     };
-})(jQuery, google).init();
+})(jQuery).init();
 
-// function loadScript() {
-//     var script = document.createElement('script');
-//     script.type = 'text/javascript';
-//     script.src = 'https://maps.googleapis.com/maps/api/js?v=3.exp&sensor=true&callback=mapInit';
-//     document.body.appendChild(script);
-// }
-//window.onload = loadScript;
+// This is the fastest way to empty an array
+// http://jsperf.com/array-clear-methods/3
+Array.prototype.clear = function() {
+    while(this.length > 0) {
+        this.pop();
+    }
+};
