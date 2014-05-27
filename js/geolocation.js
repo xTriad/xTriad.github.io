@@ -143,7 +143,7 @@ var UserTracking = (function($) {
                     var timestamp = Math.round(new Date().getTime() / 1000);
                     var textarea = $("#geo-output");
                     textarea.html("Latitude=" + position.coords.latitude + ", "
-                        + "Longitude=" + position.coords.longitude + "\n" + textarea.html());
+                        + "Longitude=" + position.coords.longitude + "<br>" + textarea.html());
 
                     console.log("Latitude=" + position.coords.latitude + "\n"
                         + "Longitude=" + position.coords.longitude + "\n"
@@ -155,9 +155,7 @@ var UserTracking = (function($) {
                         + "Timestamp=" + timestamp + "\n"
                     );
                 }
-                travelCoordinates.push(
-                    new google.maps.LatLng(position.coords.latitude, position.coords.longitude)
-                );
+                travelCoordinates.push({lat: position.coords.latitude, lng: position.coords.longitude});
             }, function(error) {
                 handleNoGeolocation(true);
                 console.log(error);
