@@ -6,22 +6,43 @@ var UserTracking = (function($) {
     // Reference to the Google map
     var map = null;
 
+    // The localStorage key
+    var storageKey = "hp-mobile-fleet";
+
     // Coordinates of the user's trip
     var travelCoordinates = [];
+
+    // How far the user has traveled
+    var travelDistance = 0;
+
+    // The user's average speed in m/s
+    var averageSpeed = 0;
+    var speedReadingCount = 0;
 
     // How often to query the GPS for updated coordinates in milliseconds
     var geoIntervalMS = 5000;
     var geoIntervalRef = null;
 
+    // The number of coordinates we need in memory before writing to disk
+    var writeToDiskCount = 5;
+
+    // Keep track of the last travel coordinate for distance calculations
+    var lastTravelCoordinate = null;
+
     // True if the browser supports the geolocation service
     var hasGeoSupport = !!navigator.geolocation;
-    
+
     // How many times we should check to see if the maps api has loaded
     var loadingCounter = 10;
 
     // Geolocation settings
     var previousLat = null;
     var previousLong = null;
+    var options = {
+        enableHighAccuracy: false,
+        timeout: 4096,
+        maximumAge: 4096
+    };
 
     /**
      * Initialize Google maps.
@@ -68,19 +89,20 @@ var UserTracking = (function($) {
      * @return {void}
      */
     function drawPath() {
-        // travelCoordinates = [
-        //     new google.maps.LatLng(37.772323, -122.214897),
-        //     new google.maps.LatLng(21.291982, -157.821856),
-        //     new google.maps.LatLng(-18.142599, 178.431),
-        //     new google.maps.LatLng(-27.46758, 153.027892)
-        // ];
-
         if(travelCoordinates.length >= 1) {
             var infoWindowStart = new google.maps.InfoWindow({
                 map: map,
                 position: travelCoordinates[0],
                 content: 'Start Location'
             });
+
+            if(travelCoordinates.length > 1) {
+                var infoWindowStop = new google.maps.InfoWindow({
+                    map: map,
+                    position: travelCoordinates[travelCoordinates.length-1],
+                    content: 'End Location'
+                });
+            }
 
             var travelPath = new google.maps.Polyline({
                 path: travelCoordinates,
@@ -117,7 +139,7 @@ var UserTracking = (function($) {
             var content = 'Error: Your browser doesn\'t support geolocation.';
         }
 
-        $("#geo-output").html(content);
+        $("#geo-output").html($("#geo-output").html() + "<br>" + content);
     }
 
     /**
@@ -130,20 +152,30 @@ var UserTracking = (function($) {
                 previousLat = position.coords.latitude;
                 previousLong = position.coords.longitude;
 
-                // TODO: Push the coordinates to disk so we don't use too much memory
-                // if(travelCoordinates.length >= 75) {
-                //     var storedData = localStorage.getItem("hp-mobile-fleet");
-                //     if(storedData != null) {
-                //         JSON.parse(storedData).concat(travelCoordinates);
-                //         travelCoordinates.clear();
-                //     }
-                //     localStorage.setItem("hp-mobile-fleet", JSON.stringify(travelCoordinates));
-                // }
+                // Update the traveling distance
+                if(lastTravelCoordinate != null) {
+                    travelDistance += getDistanceFromLatLon(
+                        lastTravelCoordinate.lat, lastTravelCoordinate.lng,
+                        position.coords.latitude, position.coords.longitude
+                    );
+                }
+
+                // Write to disk if we are using too much memory
+                if(travelCoordinates.length >= writeToDiskCount) {
+                    storeData(false);
+                }
 
                 var timestamp = Math.round(new Date().getTime() / 1000);
                 var textarea = $("#geo-output");
                 textarea.html("Latitude=" + position.coords.latitude + ", "
                     + "Longitude=" + position.coords.longitude + "<br>" + textarea.html());
+
+                // Keep track of the user's speed
+                if(position.coords.speed != null) {
+                    speedReadingCount++;
+                    averageSpeed += position.coords.speed;
+                    textarea.html("Speed=" + position.coords.latitude + "<br><br>" + textarea.html());
+                }
 
                 console.log("Latitude=" + position.coords.latitude + "\n"
                     + "Longitude=" + position.coords.longitude + "\n"
@@ -156,11 +188,12 @@ var UserTracking = (function($) {
                 );
 
                 travelCoordinates.push({lat: position.coords.latitude, lng: position.coords.longitude});
+                lastTravelCoordinate = travelCoordinates[travelCoordinates.length-1];
             }
         }, function(error) {
             handleNoGeolocation(true);
             console.log(error);
-        });
+        }, options);
     }
 
     /**
@@ -175,9 +208,9 @@ var UserTracking = (function($) {
      * @param  {int} lon1 First longitude point
      * @param  {int} lat2 Second latitude point
      * @param  {int} lon2 Second longitude point
-     * @return {int} The distance between the two points in kilometers
+     * @return {int} The distance between the two points in miles
      */
-    function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
+    function getDistanceFromLatLon(lat1, lon1, lat2, lon2) {
         var R = 6371; // Radius of the earth in km
         var dLat = deg2rad(lat2-lat1);  // deg2rad below
         var dLon = deg2rad(lon2-lon1); 
@@ -186,7 +219,7 @@ var UserTracking = (function($) {
             Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
             Math.sin(dLon/2) * Math.sin(dLon/2);
         var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
-        var d = R * c; // Distance in km
+        var d = R * c * 0.621371; // Distance in km to miles
         return d;
     }
 
@@ -195,10 +228,49 @@ var UserTracking = (function($) {
     }
 
     /**
+     * Pushes the coordinates to disk so we don't use too much memory. Although localStorage
+     * is typically given 5MB of data (5,242,880 characers), UFT16 is used so each character
+     * is two bytes which gives us a total of 2,610,954 characters that we can store.
+     * @param {bool} _loadAllData True if the "travelCoordinates" array should also be loaded
+     *    with all the data that has been accumulated so far
+     * @return {void}
+     */
+    function storeData(_loadAllData) {
+        if(travelCoordinates.length > 0) {
+            console.log("Storing data in localStorage: " + JSON.stringify(travelCoordinates));
+
+            var storedData = localStorage.getItem(storageKey);
+
+            if(storedData != null) {
+                var dataArray = JSON.parse(storedData).concat(travelCoordinates);
+                var jsonData = JSON.stringify(dataArray);
+                localStorage.setItem(storageKey, jsonData);
+
+                console.log("Storage: " + jsonData);
+
+                if(_loadAllData) {
+                    travelCoordinates = null;
+                    travelCoordinates = dataArray;
+                }
+
+                jsonData = null;
+                dataArray = null;
+            } else {
+                localStorage.setItem(storageKey, JSON.stringify(travelCoordinates));
+            }
+
+            if(!_loadAllData)
+                travelCoordinates.clear();
+        }
+    }
+
+    /**
      * Starts the gelocation service.
      * @return {void}
      */
     function geoStart() {
+        // TODO: Make sure previous trip has been sent to server
+        localStorage.setItem(storageKey, "[]");
         geoLogCoords();
         geoIntervalRef = setInterval(geoLogCoords, geoIntervalMS);
         console.log("Geolocation service started.");
@@ -210,6 +282,7 @@ var UserTracking = (function($) {
      */
     function geoStop() {
         clearInterval(geoIntervalRef);
+        storeData(true);
         console.log("Geolocation service stopped.");
     }
 
@@ -254,13 +327,13 @@ var UserTracking = (function($) {
                 $('#stopBtn').addClass('ui-state-disabled');
                 $('#viewMapBtn').removeClass('ui-state-disabled');
 
-                if(travelCoordinates.length >= 1) {
-                    var l = travelCoordinates.length-1;
-                    var distance = getDistanceFromLatLonInKm(
-                        travelCoordinates[0].lat, travelCoordinates[0].lng,
-                        travelCoordinates[l].lat, travelCoordinates[l].lng
+                if(lastTravelCoordinate != null) {
+                    if(speedReadingCount == 0)
+                        speedReadingCount++;
+                    $('#geo-output').html(
+                        'Distance: ' + travelDistance + ' miles<br>' +
+                        'Speed: ' + (averageSpeed / speedReadingCount) + ' m/s'
                     );
-                    $('#geo-output').html('Distance: ' + distance + " kilometers");
                 } else {
                     $('#viewMapBtn').addClass('ui-state-disabled');
                     $('#geo-output').html('The app was unable to collect GPS position coordinates.');
